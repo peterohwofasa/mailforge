@@ -1,6 +1,22 @@
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/server';
 
+type Status = 'draft' | 'sending' | 'sent';
+
+function StatusBadge({ status }: { status: Status }) {
+  const cls =
+    status === 'sent'
+      ? 'bg-green-50 text-green-700'
+      : status === 'sending'
+        ? 'bg-amber-50 text-amber-700'
+        : 'bg-slate-100 text-slate-700';
+  return (
+    <span className={`rounded-md px-2 py-0.5 text-xs font-medium ${cls}`}>
+      {status}
+    </span>
+  );
+}
+
 export default async function CampaignsPage() {
   const supabase = await createClient();
   const { data: campaigns } = await supabase
@@ -41,7 +57,9 @@ export default async function CampaignsPage() {
                   <td className="px-4 py-2 text-slate-600">
                     {list?.name ?? '—'}
                   </td>
-                  <td className="px-4 py-2 text-slate-600">{c.status}</td>
+                  <td className="px-4 py-2">
+                    <StatusBadge status={c.status as Status} />
+                  </td>
                   <td className="px-4 py-2 text-slate-500">
                     {new Date(c.created_at).toLocaleString()}
                   </td>

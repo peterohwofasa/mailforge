@@ -20,7 +20,9 @@ export async function sendCampaign(formData: FormData) {
 
   const { data: campaign, error: campaignError } = await supabase
     .from('campaigns')
-    .select('id, subject, html_body, list_id, status, reply_to, from_name, from_email')
+    .select(
+      'id, subject, html_body, plain_text_body, list_id, status, reply_to, from_name, from_email',
+    )
     .eq('id', campaignId)
     .single();
 
@@ -104,12 +106,18 @@ export async function sendCampaign(formData: FormData) {
       tenant,
     });
 
+    // Honor a user-supplied plain-text body when set, else fall back to the
+    // auto-generated one from renderEmail.
+    const text = campaign.plain_text_body?.trim()
+      ? campaign.plain_text_body
+      : rendered.text;
+
     const { data: sent, error: sendError } = await resend.emails.send({
       from,
       to: recipient.email,
       subject: campaign.subject,
       html: rendered.html,
-      text: rendered.text,
+      text,
       replyTo,
     });
 
@@ -144,4 +152,76 @@ export async function sendCampaign(formData: FormData) {
   revalidatePath(`/campaigns/${campaignId}`);
   revalidatePath(`/campaigns/${campaignId}/report`);
   redirect(`/campaigns/${campaignId}/report`);
+}
+
+export async function updateCampaign(formData: FormData) {
+  const id = String(formData.get('campaign_id') ?? '');
+  if (!id) redirect('/campaigns');
+
+  const subject = String(formData.get('subject') ?? '').trim();
+  const html_body = String(formData.get('html_body') ?? '');
+  const plain_text_body =
+    String(formData.get('plain_text_body') ?? '').trim() || null;
+  const list_id = String(formData.get('list_id') ?? '');
+  const from_name = String(formData.get('from_name') ?? '').trim() || null;
+  const from_email =
+    String(formData.get('from_email') ?? '').trim().toLowerCase() || null;
+  const reply_to =
+    String(formData.get('reply_to') ?? '').trim().toLowerCase() || null;
+
+  if (!subject || !html_body || !list_id) {
+    redirect(
+      `/campaigns/${id}/edit?error=` +
+        encodeURIComponent('Subject, HTML body, and list are required.'),
+    );
+  }
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect('/login');
+
+  // Only drafts are editable. Read status first so a sent campaign can't be
+  // mutated even if someone forges the URL.
+  const { data: existing } = await supabase
+    .from('campaigns')
+    .select('status')
+    .eq('id', id)
+    .single();
+
+  if (!existing) {
+    redirect(
+      `/campaigns?error=` + encodeURIComponent('Campaign not found.'),
+    );
+  }
+  if (existing.status !== 'draft') {
+    redirect(
+      `/campaigns/${id}?error=` +
+        encodeURIComponent('Sent campaigns cannot be edited.'),
+    );
+  }
+
+  const { error } = await supabase
+    .from('campaigns')
+    .update({
+      subject,
+      html_body,
+      plain_text_body,
+      list_id,
+      from_name,
+      from_email,
+      reply_to,
+    })
+    .eq('id', id);
+
+  if (error) {
+    redirect(
+      `/campaigns/${id}/edit?error=` + encodeURIComponent(error.message),
+    );
+  }
+
+  revalidatePath('/campaigns');
+  revalidatePath(`/campaigns/${id}`);
+  redirect(`/campaigns/${id}?notice=` + encodeURIComponent('Saved.'));
 }

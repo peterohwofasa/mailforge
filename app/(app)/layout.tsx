@@ -8,6 +8,7 @@ const NAV = [
   { href: '/contacts', label: 'Contacts' },
   { href: '/lists', label: 'Lists' },
   { href: '/campaigns', label: 'Campaigns' },
+  { href: '/templates', label: 'Templates' },
 ];
 
 export default async function AppLayout({
