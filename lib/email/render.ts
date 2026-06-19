@@ -1,5 +1,6 @@
-// Phase-3 minimal email renderer. Phase 7 hardens this with signed unsubscribe
-// links, proper html-to-text via a library, and CSS inlining.
+// Email renderer. {{name}}/{{email}} substitution + auto-appended footer
+// with the recipient-specific signed unsubscribe link (built upstream) and the
+// tenant's physical address (required by law in every send).
 
 interface ContactLike {
   email: string;
@@ -14,6 +15,8 @@ interface RenderArgs {
   htmlBody: string;
   contact: ContactLike;
   tenant: TenantLike;
+  /** Signed, recipient-specific unsubscribe URL — built by the caller. */
+  unsubUrl: string;
 }
 
 export interface RenderedEmail {
@@ -25,15 +28,12 @@ export function renderEmail({
   htmlBody,
   contact,
   tenant,
+  unsubUrl,
 }: RenderArgs): RenderedEmail {
   const personalised = htmlBody
     .replaceAll('{{name}}', escapeHtml(contact.name ?? ''))
     .replaceAll('{{email}}', escapeHtml(contact.email));
 
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? '';
-  // Placeholder token. Phase 7 replaces this with an HMAC-signed token
-  // encoding {contactId, campaignId}.
-  const unsubUrl = `${appUrl}/unsubscribe/placeholder`;
   const address = escapeHtml(tenant.physical_address ?? '');
 
   const html = `${personalised}
